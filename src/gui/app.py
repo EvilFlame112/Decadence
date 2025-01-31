@@ -17,16 +17,22 @@ from models.model import InterpolationModel
 class VideoInterpolationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Video Frame Interpolation")
-        self.root.geometry("800x600")
+        self.root.title("AI Video Interpolator")
+        self.root.geometry("900x650")
+        self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your icon file
         
-        # Model setup
+        # Model and settings
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = InterpolationModel().to(self.device)
-        self.model.load_state_dict(torch.load("models/interpolator_resunlocked.pth", map_location=self.device))
-        self.model.eval()
+        self.model = None
+        self.available_models = self._get_available_models()
+        self.num_cycles = 1  # Default: 1 cycle (2x FPS)
         
-        # UI Elements
+        # UI styling
+        self.style = ttk.Style()
+        self.style.configure("TButton", padding=6, font=("Helvetica", 10))
+        self.style.configure("TLabel", font=("Helvetica", 10))
+        
+        # Widgets
         self.create_widgets()
         self.processing = False
         self.input_path = ""
@@ -36,24 +42,43 @@ class VideoInterpolationApp:
         self.original_frames_dir = "temp/original_frames"
         self.interpolated_frames_dir = "temp/interpolated_frames"
         os.makedirs(self.original_frames_dir, exist_ok=True)
-        os.makedirs(self.interpolated_frames_dir, exist_ok=True)
+
+    def _get_available_models(self):
+        models_dir = "models"
+        return [f for f in os.listdir(models_dir) if f.endswith(".pth")]
 
     def create_widgets(self):
+        # Main container
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
+        
+        # Model selection
+        ttk.Label(main_frame, text="Select Model:").grid(row=0, column=0, sticky=tk.W)
+        self.model_combobox = ttk.Combobox(main_frame, values=self.available_models)
+        self.model_combobox.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
+        self.model_combobox.current(0)
+        
+        # Interpolation cycles
+        ttk.Label(main_frame, text="Interpolation Cycles:").grid(row=1, column=0, sticky=tk.W)
+        self.cycle_spinbox = ttk.Spinbox(main_frame, from_=1, to=3, width=5)
+        self.cycle_spinbox.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
+        self.cycle_spinbox.set(1)
+        
         # File selection
-        self.btn_select = ttk.Button(self.root, text="Select Video File", command=self.select_file)
-        self.btn_select.pack(pady=10)
+        self.btn_select = ttk.Button(main_frame, text="Select Video File", command=self.select_file)
+        self.btn_select.grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.EW)
+        
+        # Preview
+        self.preview_label = ttk.Label(main_frame)
+        self.preview_label.grid(row=3, column=0, columnspan=2, pady=10)
         
         # Progress bar
-        self.progress = ttk.Progressbar(self.root, orient=tk.HORIZONTAL, length=400, mode='determinate')
-        self.progress.pack(pady=10)
+        self.progress = ttk.Progressbar(main_frame, orient=tk.HORIZONTAL, length=400, mode='determinate')
+        self.progress.grid(row=4, column=0, columnspan=2, pady=10, sticky=tk.EW)
         
-        # Start button
-        self.btn_process = ttk.Button(self.root, text="Process Video", command=self.start_processing)
-        self.btn_process.pack(pady=10)
-        
-        # Preview window
-        self.preview_label = ttk.Label(self.root)
-        self.preview_label.pack(pady=10)
+        # Process button
+        self.btn_process = ttk.Button(main_frame, text="Process Video", command=self.start_processing)
+        self.btn_process.grid(row=5, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
     def select_file(self):
         self.input_path = filedialog.askopenfilename(
@@ -78,6 +103,20 @@ class VideoInterpolationApp:
             messagebox.showerror("Error", "Please select a video file first!")
             return
         
+        # Load selected model
+        model_name = self.model_combobox.get()
+        self.model = InterpolationModel().to(self.device)
+        try:
+            self.model.load_state_dict(torch.load(f"models/{model_name}", map_location=self.device))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load model: {str(e)}")
+            return
+        self.model.eval()
+        
+        # Get number of cycles
+        self.num_cycles = int(self.cycle_spinbox.get())
+        
+        # Get output path
         self.output_path = filedialog.asksaveasfilename(
             defaultextension=".mp4",
             filetypes=[("MP4 Video", "*.mp4"), ("AVI Video", "*.avi")]
@@ -89,109 +128,92 @@ class VideoInterpolationApp:
 
     def process_video(self):
         try:
-            # Extract frames and get original resolution
+            total_steps = 10 + (self.num_cycles * 80) + 10  # 10% extraction, 80% per cycle, 10% writing
+            step = 0
+            
+            # Step 1: Extract frames (10%)
             original_frames, original_res = self.extract_frames(self.input_path)
+            step += 10
+            self.update_progress(step / total_steps * 100)
             
-            # Interpolate frames
-            interpolated_frames = self.generate_interpolated_frames(original_frames)
+            # Step 2: Interpolate over multiple cycles
+            interpolated_frames = original_frames.copy()
+            for cycle in range(self.num_cycles):
+                interpolated_frames = self.generate_interpolated_frames(interpolated_frames)
+                step += 80 / self.num_cycles
+                self.update_progress(step / total_steps * 100)
             
-            # Create video with original resolution
+            # Step 3: Write video (10%)
             self.create_video(interpolated_frames, original_res)
+            self.update_progress(100)
             
             messagebox.showinfo("Success", "Video processing completed!")
-        
+            
         except Exception as e:
             messagebox.showerror("Error", f"Processing failed: {str(e)}")
         finally:
             self.clean_temp_files()
             self.processing = False
-    
-    def run_model(self, frame1, frame2):
-        """Run the model on two input frames."""
-        # Preprocess frames
-        frame1_tensor = self.preprocess(frame1).to(self.device)
-        frame2_tensor = self.preprocess(frame2).to(self.device)
-        
-        # Generate interpolated frame
-        with torch.no_grad():
-            interpolated_tensor = self.model(frame1_tensor, frame2_tensor)
-        
-        # Postprocess and return
-        return self.postprocess(interpolated_tensor)
 
     def extract_frames(self, video_path):
         cap = cv2.VideoCapture(video_path)
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        # Get original resolution
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
         original_frames = []
+        idx = 0
         while cap.isOpened() and self.processing:
             ret, frame = cap.read()
             if not ret:
                 break
             
-            # Keep original resolution
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             original_frames.append(frame)
-            
-            # Update progress (first 50%)
-            self.update_progress(len(original_frames) / frame_count * 50)
+            idx += 1
         
         cap.release()
         return original_frames, (width, height)
 
+    def generate_interpolated_frames(self, frames):
+        interpolated_frames = []
+        for i in range(len(frames)-1):
+            frame1 = frames[i]
+            frame2 = frames[i+1]
+            interpolated_frame = self.run_model(frame1, frame2)
+            interpolated_frames.extend([frame1, interpolated_frame])
+        interpolated_frames.append(frames[-1])
+        return interpolated_frames
+
+    def run_model(self, frame1, frame2):
+        frame1_tensor = self.preprocess(frame1).to(self.device)
+        frame2_tensor = self.preprocess(frame2).to(self.device)
+        with torch.no_grad():
+            interpolated_tensor = self.model(frame1_tensor, frame2_tensor)
+        return self.postprocess(interpolated_tensor)
+
     def preprocess(self, frame):
-        # Convert to tensor and normalize (no resizing)
         tensor = torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0
-        return tensor.unsqueeze(0).to(self.device)  # Add batch dim
+        return tensor.unsqueeze(0)
 
     def postprocess(self, tensor):
-        # Convert tensor to numpy array (original resolution)
         tensor = tensor.squeeze().cpu().permute(1, 2, 0) * 255
         return tensor.numpy().astype(np.uint8)
 
-    def generate_interpolated_frames(self, original_frames):
-        interpolated_frames = []
-        total_pairs = len(original_frames) - 1
+    def create_video(self, frames, original_res):
+        width, height = original_res
+        cap = cv2.VideoCapture(self.input_path)
+        original_fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         
-        if total_pairs == 0:
-            return original_frames  # No frames to interpolate
+        # Calculate new FPS: original_fps * (2^num_cycles)
+        new_fps = original_fps * (2 ** self.num_cycles)
         
-        for i in range(total_pairs):
-            frame1 = original_frames[i]
-            frame2 = original_frames[i+1]
-            
-            # Generate interpolated frame
-            interpolated_frame = self.run_model(frame1, frame2)
-            interpolated_frames.extend([frame1, interpolated_frame])
-            
-            # Update progress (50% to 100%)
-            self.update_progress(50 + ((i + 1) / total_pairs) * 50)
-        
-        # Add final frame
-        interpolated_frames.append(original_frames[-1])
-        return interpolated_frames
-
-    def create_video(self, frames, original_resolution):
-        if not frames:
-            return
-        
-        # Use original resolution
-        height, width = original_resolution[1], original_resolution[0]
-        original_fps = cv2.VideoCapture(self.input_path).get(cv2.CAP_PROP_FPS)
-        
-        # Double FPS (interpolated frames added)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(self.output_path, fourcc, original_fps * 2, (width, height))
-        
+        out = cv2.VideoWriter(self.output_path, fourcc, new_fps, (width, height))
         for frame in frames:
-            # Convert RGB to BGR and write
-            bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            out.write(bgr_frame)
+            out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         out.release()
 
     def update_progress(self, value):
