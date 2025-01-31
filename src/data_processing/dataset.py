@@ -5,7 +5,7 @@ import cv2
 from torchvision import transforms
 
 class VimeoDataset(Dataset):
-    def __init__(self, root_dir="data/processed_frames", train=True):
+    def __init__(self, root_dir="data/vimeo_triplet/sequences", train=True):
         self.root_dir = root_dir
         # Load triplet list (e.g., "00001/0001")
         split_file = os.path.join("data\\vimeo_triplet", "tri_trainlist.txt" if train else "tri_testlist.txt")

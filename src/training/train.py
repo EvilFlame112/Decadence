@@ -51,7 +51,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=1,  # Parallel data loading
+        num_workers=4,  # Parallel data loading
         pin_memory=True  # Faster data transfer to GPU
     )
 
@@ -92,5 +92,5 @@ if __name__ == "__main__":
         torch.cuda.empty_cache()  # Free unused GPU memory
 
     # Save model
-    torch.save(model.state_dict(), "models/interpolator.pth")
+    torch.save(model.state_dict(), "models/interpolator_resunlocked.pth")
     print("Training complete!")
