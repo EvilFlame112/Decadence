@@ -23,7 +23,7 @@ class VideoInterpolationApp:
         # Model setup
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = InterpolationModel().to(self.device)
-        self.model.load_state_dict(torch.load("models/interpolator.pth", map_location=self.device))
+        self.model.load_state_dict(torch.load("models/interpolator_resunlocked.pth", map_location=self.device))
         self.model.eval()
         
         # UI Elements
@@ -89,17 +89,17 @@ class VideoInterpolationApp:
 
     def process_video(self):
         try:
-            # Step 1: Extract original frames
-            original_frames = self.extract_frames(self.input_path)
+            # Extract frames and get original resolution
+            original_frames, original_res = self.extract_frames(self.input_path)
             
-            # Step 2: Interpolate frames
+            # Interpolate frames
             interpolated_frames = self.generate_interpolated_frames(original_frames)
             
-            # Step 3: Create new video
-            self.create_video(interpolated_frames)
+            # Create video with original resolution
+            self.create_video(interpolated_frames, original_res)
             
             messagebox.showinfo("Success", "Video processing completed!")
-            
+        
         except Exception as e:
             messagebox.showerror("Error", f"Processing failed: {str(e)}")
         finally:
@@ -121,85 +121,77 @@ class VideoInterpolationApp:
 
     def extract_frames(self, video_path):
         cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        original_fps = cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
+        # Get original resolution
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
         original_frames = []
-        idx = 0
         while cap.isOpened() and self.processing:
             ret, frame = cap.read()
             if not ret:
                 break
             
+            # Keep original resolution
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             original_frames.append(frame)
             
-            # Save frame for potential debugging
-            cv2.imwrite(os.path.join(self.original_frames_dir, f"frame_{idx:04d}.png"), frame)
-            idx += 1
-            
-            self.update_progress(idx/frame_count * 50)  # First 50% progress
+            # Update progress (first 50%)
+            self.update_progress(len(original_frames) / frame_count * 50)
         
         cap.release()
-        return original_frames
-
-    def generate_interpolated_frames(self, original_frames):
-        interpolated_frames = []
-        
-        for i in range(len(original_frames)-1):
-            # Get consecutive frames
-            frame1 = original_frames[i]
-            frame2 = original_frames[i+1]
-            
-            # Generate interpolated frame using run_model
-            interpolated_frame = self.run_model(frame1, frame2)
-            
-            # Append original and interpolated frames
-            interpolated_frames.append(frame1)
-            interpolated_frames.append(interpolated_frame)
-        
-        # Add last frame
-        interpolated_frames.append(original_frames[-1])
-        return interpolated_frames
+        return original_frames, (width, height)
 
     def preprocess(self, frame):
-        # Resize frame to match model input (256x256)
-        frame = cv2.resize(frame, (256, 256))
-        
-        # Convert to tensor and normalize
+        # Convert to tensor and normalize (no resizing)
         tensor = torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0
-        return tensor.unsqueeze(0)  # Add batch dimension
+        return tensor.unsqueeze(0).to(self.device)  # Add batch dim
 
     def postprocess(self, tensor):
+        # Convert tensor to numpy array (original resolution)
         tensor = tensor.squeeze().cpu().permute(1, 2, 0) * 255
         return tensor.numpy().astype(np.uint8)
 
-    def create_video(self, frames):
+    def generate_interpolated_frames(self, original_frames):
+        interpolated_frames = []
+        total_pairs = len(original_frames) - 1
+        
+        if total_pairs == 0:
+            return original_frames  # No frames to interpolate
+        
+        for i in range(total_pairs):
+            frame1 = original_frames[i]
+            frame2 = original_frames[i+1]
+            
+            # Generate interpolated frame
+            interpolated_frame = self.run_model(frame1, frame2)
+            interpolated_frames.extend([frame1, interpolated_frame])
+            
+            # Update progress (50% to 100%)
+            self.update_progress(50 + ((i + 1) / total_pairs) * 50)
+        
+        # Add final frame
+        interpolated_frames.append(original_frames[-1])
+        return interpolated_frames
+
+    def create_video(self, frames, original_resolution):
         if not frames:
             return
         
-        # Get video properties from input video
-        cap = cv2.VideoCapture(self.input_path)
-        original_fps = cap.get(cv2.CAP_PROP_FPS)
-        original_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.release()
+        # Use original resolution
+        height, width = original_resolution[1], original_resolution[0]
+        original_fps = cv2.VideoCapture(self.input_path).get(cv2.CAP_PROP_FPS)
         
-        # Calculate new FPS to maintain the same duration
-        new_fps = original_fps * 2  # Double FPS for smooth playback
-        
-        # Get frame dimensions (all frames are resized to 256x256)
-        height, width = 256, 256
-        
-        # Initialize video writer
+        # Double FPS (interpolated frames added)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(self.output_path, fourcc, new_fps, (width, height))
+        out = cv2.VideoWriter(self.output_path, fourcc, original_fps * 2, (width, height))
         
-        # Write all interpolated frames
         for frame in frames:
-            frame = cv2.resize(frame, (width, height))  # Ensure correct size
+            # Convert RGB to BGR and write
             bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             out.write(bgr_frame)
-        
         out.release()
 
     def update_progress(self, value):
