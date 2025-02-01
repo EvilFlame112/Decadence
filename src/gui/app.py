@@ -18,7 +18,6 @@ class VideoInterpolationApp:
     def __init__(self, root):
         self.root = root
 <<<<<<< HEAD
-<<<<<<< HEAD
         self.style = ttk.Style(theme='darkly')  # Modern theme
         self.root.title("Decadence - AI Video Interpolator")
         self.root.geometry("1000x750")
@@ -27,11 +26,6 @@ class VideoInterpolationApp:
         self.style.configure("TButton", font=('Helvetica', 11))
         self.style.configure("TLabel", font=('Helvetica', 10))
         self.style.configure("Header.TLabel", font=('Helvetica', 12, 'bold'))
-=======
-        self.root.title("AI Video Interpolator")
-        self.root.geometry("900x650")
-        self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your icon file
->>>>>>> parent of 75f4239 (Update app.py)
 =======
         self.root.title("AI Video Interpolator")
         self.root.geometry("900x650")
