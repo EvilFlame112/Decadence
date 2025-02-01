@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 import cv2
 import os
 import sys
@@ -17,28 +19,26 @@ from models.model import InterpolationModel
 class VideoInterpolationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Decadence - Video Interpolation AI")
+        self.root.title("AI Video Interpolator")
         self.root.geometry("900x650")
-        self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your icon file
+        self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your .ico file
         
-        # Model and settings
+        # Setup UI theme and style
+        self.style = ttk.Style(theme="darkly")  # Try other themes: flatly, darkly, etc.
+        
+        # Initialize model and settings
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.available_models = self._get_available_models()
-        self.num_cycles = 1  # Default: 1 cycle (2x FPS)
+        self.num_cycles = 1
         
-        # UI styling
-        self.style = ttk.Style()
-        self.style.configure("TButton", padding=6, font=("Helvetica", 10))
-        self.style.configure("TLabel", font=("Helvetica", 10))
-        
-        # Widgets
+        # Create UI components
         self.create_widgets()
         self.processing = False
         self.input_path = ""
         self.output_path = ""
         
-        # Temporary directories
+        # Setup temporary directories
         self.original_frames_dir = "temp/original_frames"
         self.interpolated_frames_dir = "temp/interpolated_frames"
         os.makedirs(self.original_frames_dir, exist_ok=True)
@@ -53,31 +53,34 @@ class VideoInterpolationApp:
         main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
         
         # Model selection
-        ttk.Label(main_frame, text="Select Model:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(main_frame, text="Select Model:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.model_combobox = ttk.Combobox(main_frame, values=self.available_models)
         self.model_combobox.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
         self.model_combobox.current(0)
         
         # Interpolation cycles
-        ttk.Label(main_frame, text="Interpolation Cycles:").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(main_frame, text="Interpolation Cycles (1-3):").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.cycle_spinbox = ttk.Spinbox(main_frame, from_=1, to=3, width=5)
         self.cycle_spinbox.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
         self.cycle_spinbox.set(1)
         
-        # File selection
-        self.btn_select = ttk.Button(main_frame, text="Select Video File", command=self.select_file)
+        # File selection button
+        self.btn_select = ttk.Button(main_frame, text="Select Video File", 
+                                   command=self.select_file, bootstyle=PRIMARY)
         self.btn_select.grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.EW)
         
-        # Preview
+        # Preview window
         self.preview_label = ttk.Label(main_frame)
         self.preview_label.grid(row=3, column=0, columnspan=2, pady=10)
         
         # Progress bar
-        self.progress = ttk.Progressbar(main_frame, orient=tk.HORIZONTAL, length=400, mode='determinate')
+        self.progress = ttk.Progressbar(main_frame, orient=tk.HORIZONTAL, 
+                                      mode='determinate', bootstyle=SUCCESS)
         self.progress.grid(row=4, column=0, columnspan=2, pady=10, sticky=tk.EW)
         
         # Process button
-        self.btn_process = ttk.Button(main_frame, text="Process Video", command=self.start_processing)
+        self.btn_process = ttk.Button(main_frame, text="Process Video", 
+                                    command=self.start_processing, bootstyle=PRIMARY)
         self.btn_process.grid(row=5, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
     def select_file(self):
@@ -105,18 +108,16 @@ class VideoInterpolationApp:
         
         # Load selected model
         model_name = self.model_combobox.get()
-        self.model = InterpolationModel().to(self.device)
         try:
+            self.model = InterpolationModel().to(self.device)
             self.model.load_state_dict(torch.load(f"models/{model_name}", map_location=self.device))
+            self.model.eval()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load model: {str(e)}")
             return
-        self.model.eval()
         
-        # Get number of cycles
+        # Get processing parameters
         self.num_cycles = int(self.cycle_spinbox.get())
-        
-        # Get output path
         self.output_path = filedialog.asksaveasfilename(
             defaultextension=".mp4",
             filetypes=[("MP4 Video", "*.mp4"), ("AVI Video", "*.avi")]
@@ -128,22 +129,19 @@ class VideoInterpolationApp:
 
     def process_video(self):
         try:
-            total_steps = 10 + (self.num_cycles * 80) + 10  # 10% extraction, 80% per cycle, 10% writing
-            step = 0
+            self.update_progress(0)
             
-            # Step 1: Extract frames (10%)
+            # Phase 1: Extract frames (30% of progress)
             original_frames, original_res = self.extract_frames(self.input_path)
-            step += 10
-            self.update_progress(step / total_steps * 100)
+            self.update_progress(30)
             
-            # Step 2: Interpolate over multiple cycles
+            # Phase 2: Interpolate frames (60% of progress)
             interpolated_frames = original_frames.copy()
             for cycle in range(self.num_cycles):
                 interpolated_frames = self.generate_interpolated_frames(interpolated_frames)
-                step += 80 / self.num_cycles
-                self.update_progress(step / total_steps * 100)
+                self.update_progress(30 + (60 * (cycle + 1) // self.num_cycles))
             
-            # Step 3: Write video (10%)
+            # Phase 3: Save video (10% of progress)
             self.create_video(interpolated_frames, original_res)
             self.update_progress(100)
             
@@ -157,7 +155,6 @@ class VideoInterpolationApp:
 
     def extract_frames(self, video_path):
         cap = cv2.VideoCapture(video_path)
-        original_fps = cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -172,17 +169,26 @@ class VideoInterpolationApp:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             original_frames.append(frame)
             idx += 1
+            
+            # Update progress during extraction
+            self.update_progress(30 * (idx / frame_count))
         
         cap.release()
         return original_frames, (width, height)
 
     def generate_interpolated_frames(self, frames):
         interpolated_frames = []
-        for i in range(len(frames)-1):
+        total_pairs = len(frames) - 1
+        
+        for i in range(total_pairs):
             frame1 = frames[i]
             frame2 = frames[i+1]
             interpolated_frame = self.run_model(frame1, frame2)
             interpolated_frames.extend([frame1, interpolated_frame])
+            
+            # Update progress during interpolation
+            self.update_progress(30 + (60 * (i + 1) / total_pairs))
+        
         interpolated_frames.append(frames[-1])
         return interpolated_frames
 
@@ -207,11 +213,10 @@ class VideoInterpolationApp:
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
         
-        # Calculate new FPS: original_fps * (2^num_cycles)
         new_fps = original_fps * (2 ** self.num_cycles)
-        
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(self.output_path, fourcc, new_fps, (width, height))
+        
         for frame in frames:
             out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         out.release()
@@ -233,7 +238,7 @@ class VideoInterpolationApp:
             self.root.destroy()
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = ttk.Window()
     app = VideoInterpolationApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
