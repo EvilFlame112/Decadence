@@ -21,7 +21,7 @@ class VideoInterpolationApp:
     def __init__(self, root):
         self.root = root
         self.style = ttk.Style(theme='darkly')  # Modern theme
-        self.root.title("Decadence - AI Video Interpolator")
+        self.root.title("AI Video Interpolator Pro")
         self.root.geometry("1000x750")
         
         # Configure theme colors
