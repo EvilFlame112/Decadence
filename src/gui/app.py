@@ -17,7 +17,7 @@ from models.model import InterpolationModel
 class VideoInterpolationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("AI Video Interpolator")
+        self.root.title("Decadence - Video Interpolation AI")
         self.root.geometry("900x650")
         self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your icon file
         
