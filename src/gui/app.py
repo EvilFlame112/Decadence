@@ -1,14 +1,15 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-import cv2
-import os
 import sys
-import threading
-import torch
+import os
+import cv2
 import numpy as np
-from PIL import Image, ImageTk
+import torch
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QComboBox, QSpinBox, QProgressBar, QFileDialog, QMessageBox, QTextEdit, QScrollArea
+)
+from PyQt5.QtGui import QPixmap, QImage, QColor, QPalette, QFont
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PIL import Image
 # Add the project root directory to Python's module search path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
@@ -16,35 +17,30 @@ sys.path.insert(0, project_root)
 # Now import the model
 from models.model import InterpolationModel
 
-class VideoInterpolationApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Decadence - Video Interpolation App")
-        self.root.geometry("1200x900")  # Slightly taller window for console
+
+class VideoInterpolationApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("AI Video Interpolator")
+        self.setGeometry(100, 100, 1200, 900)  # Window size
         self.center_window()  # Center the window on launch
-        self.root.iconbitmap("assets/logo_no_bg.ico")  # Add your .ico file
-        
-        # Setup UI theme and style (dark theme)
-        self.style = ttk.Style(theme="darkly")  # Dark theme
-        self.style.configure("TButton", padding=6, font=("Helvetica", 10), borderwidth=0, relief="flat", bordercolor="#444", focuscolor="#444")
-        self.style.map("TButton", background=[("active", "#555")], foreground=[("active", "#fff")])
-        self.style.configure("TLabel", font=("Helvetica", 10), background="#333", foreground="#fff")
-        self.style.configure("TFrame", background="#333")
-        self.style.configure("TCombobox", fieldbackground="#444", background="#444", foreground="#fff")
-        self.style.configure("TProgressbar", background="#666", troughcolor="#444")
-        
+
         # Initialize model and settings
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.available_models = self._get_available_models()
         self.num_cycles = 1
-        
+
+        # Theme settings
+        self.dark_mode = True
+        self.set_dark_theme()
+
         # Create UI components
-        self.create_widgets()
+        self.init_ui()
         self.processing = False
         self.input_path = ""
         self.output_path = ""
-        
+
         # Setup temporary directories
         self.original_frames_dir = "temp/original_frames"
         self.interpolated_frames_dir = "temp/interpolated_frames"
@@ -52,85 +48,197 @@ class VideoInterpolationApp:
 
     def center_window(self):
         """Center the window on the user's screen."""
-        self.root.update_idletasks()
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        window_width = self.root.winfo_width()
-        window_height = self.root.winfo_height()
-        x = (screen_width // 2) - (window_width // 2)
-        y = (screen_height // 2) - (window_height // 2)
-        self.root.geometry(f"+{x}+{y}")
+        screen_geometry = QApplication.desktop().screenGeometry()
+        x = (screen_geometry.width() - self.width()) // 2
+        y = (screen_geometry.height() - self.height()) // 2
+        self.move(x, y)
 
     def _get_available_models(self):
         models_dir = "models"
         return [f for f in os.listdir(models_dir) if f.endswith(".pth")]
 
-    def create_widgets(self):
-        # Main container
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
-        
+    def init_ui(self):
+        # Main widget and layout
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
+
         # Left panel for controls
-        control_frame = ttk.Frame(main_frame, padding=10)
-        control_frame.grid(row=0, column=0, sticky=tk.NSEW, padx=10, pady=10)
-        
+        control_panel = QWidget()
+        control_layout = QVBoxLayout(control_panel)
+        control_layout.setAlignment(Qt.AlignTop)
+
+        # Application title
+        title = QLabel("AI Video Interpolator")
+        title.setFont(QFont("Arial", 18, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        control_layout.addWidget(title)
+
+        # Theme toggle button
+        self.btn_theme = QPushButton("Switch to Light Mode")
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        self.btn_theme.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
+        control_layout.addWidget(self.btn_theme)
+
         # Model selection
-        ttk.Label(control_frame, text="Select Model:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.model_combobox = ttk.Combobox(control_frame, values=self.available_models, bootstyle="dark")
-        self.model_combobox.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
-        self.model_combobox.current(0)
-        
+        control_layout.addWidget(QLabel("Select Model:"))
+        self.model_combobox = QComboBox()
+        self.model_combobox.addItems(self.available_models)
+        self.model_combobox.setStyleSheet("QComboBox { border-radius: 10px; padding: 5px; }")
+        control_layout.addWidget(self.model_combobox)
+
         # Interpolation cycles
-        ttk.Label(control_frame, text="Interpolation Cycles (1-3):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.cycle_spinbox = ttk.Spinbox(control_frame, from_=1, to=3, width=5, bootstyle="dark")
-        self.cycle_spinbox.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
-        self.cycle_spinbox.set(1)
-        
+        control_layout.addWidget(QLabel("Interpolation Cycles (1-3):"))
+        self.cycle_spinbox = QSpinBox()
+        self.cycle_spinbox.setRange(1, 3)
+        self.cycle_spinbox.setValue(1)
+        self.cycle_spinbox.setStyleSheet("QSpinBox { border-radius: 10px; padding: 5px; }")
+        control_layout.addWidget(self.cycle_spinbox)
+
         # File selection button
-        self.btn_select = ttk.Button(control_frame, text="Select Video File", 
-                                   command=self.select_file, bootstyle="primary-outline")
-        self.btn_select.grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.EW)
-        
+        self.btn_select = QPushButton("Select Video File")
+        self.btn_select.clicked.connect(self.select_file)
+        self.btn_select.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
+        control_layout.addWidget(self.btn_select)
+
         # Process button
-        self.btn_process = ttk.Button(control_frame, text="Process Video", 
-                                    command=self.start_processing, bootstyle="success-outline")
-        self.btn_process.grid(row=3, column=0, columnspan=2, pady=10, sticky=tk.EW)
-        
+        self.btn_process = QPushButton("Process Video")
+        self.btn_process.clicked.connect(self.start_processing)
+        self.btn_process.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
+        control_layout.addWidget(self.btn_process)
+
         # Progress bar
-        self.progress = ttk.Progressbar(control_frame, orient=tk.HORIZONTAL, 
-                                      mode='determinate', bootstyle="success-striped")
-        self.progress.grid(row=4, column=0, columnspan=2, pady=10, sticky=tk.EW)
-        
-        # Right panel for preview
-        preview_frame = ttk.Frame(main_frame, padding=10)
-        preview_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=10, pady=10)
-        
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setStyleSheet("QProgressBar { border-radius: 5px; }")
+        control_layout.addWidget(self.progress)
+
+        # Add control panel to main layout
+        main_layout.addWidget(control_panel, stretch=1)
+
+        # Right panel for preview and console
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+
         # Preview label for video/image
-        self.preview_label = ttk.Label(preview_frame, bootstyle="dark")
-        self.preview_label.pack(fill=tk.BOTH, expand=True)
-        
+        self.preview_label = QLabel()
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setStyleSheet("background-color: #333; border-radius: 10px;")
+        right_layout.addWidget(self.preview_label, stretch=3)
+
         # Console view
-        console_frame = ttk.Frame(main_frame, padding=10)
-        console_frame.grid(row=1, column=0, columnspan=2, sticky=tk.EW, padx=10, pady=10)
-        
-        self.console = scrolledtext.ScrolledText(console_frame, wrap=tk.WORD, width=100, height=10, font=("Consolas", 10))
-        self.console.pack(fill=tk.BOTH, expand=True)
-        
-        # Configure grid weights for adaptive scaling
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=3)
-        main_frame.rowconfigure(0, weight=3)
-        main_frame.rowconfigure(1, weight=1)
+        self.console = QTextEdit()
+        self.console.setReadOnly(True)
+        self.console.setStyleSheet("background-color: #333; color: #fff; border-radius: 10px; padding: 10px;")
+        right_layout.addWidget(self.console, stretch=1)
+
+        # Add right panel to main layout
+        main_layout.addWidget(right_panel, stretch=3)
+
+        # Set main widget
+        self.setCentralWidget(main_widget)
+
+    def toggle_theme(self):
+        """Toggle between light and dark themes."""
+        self.dark_mode = not self.dark_mode
+        if self.dark_mode:
+            self.set_dark_theme()
+            self.btn_theme.setText("Switch to Light Mode")
+        else:
+            self.set_light_theme()
+            self.btn_theme.setText("Switch to Dark Mode")
+
+    def set_dark_theme(self):
+        """Apply dark theme styling."""
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #2E3440;
+                color: #ECEFF4;
+            }
+            QLabel {
+                color: #ECEFF4;
+            }
+            QPushButton {
+                background-color: #5E81AC;
+                color: #ECEFF4;
+                border-radius: 10px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #81A1C1;
+            }
+            QComboBox, QSpinBox {
+                background-color: #4C566A;
+                color: #ECEFF4;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QProgressBar {
+                background-color: #4C566A;
+                color: #ECEFF4;
+                border-radius: 5px;
+            }
+            QProgressBar::chunk {
+                background-color: #81A1C1;
+                border-radius: 5px;
+            }
+            QTextEdit {
+                background-color: #3B4252;
+                color: #ECEFF4;
+                border-radius: 10px;
+                padding: 10px;
+            }
+        """)
+
+    def set_light_theme(self):
+        """Apply light theme styling."""
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #ECEFF4;
+                color: #2E3440;
+            }
+            QLabel {
+                color: #2E3440;
+            }
+            QPushButton {
+                background-color: #81A1C1;
+                color: #ECEFF4;
+                border-radius: 10px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #5E81AC;
+            }
+            QComboBox, QSpinBox {
+                background-color: #D8DEE9;
+                color: #2E3440;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QProgressBar {
+                background-color: #D8DEE9;
+                color: #2E3440;
+                border-radius: 5px;
+            }
+            QProgressBar::chunk {
+                background-color: #81A1C1;
+                border-radius: 5px;
+            }
+            QTextEdit {
+                background-color: #E5E9F0;
+                color: #2E3440;
+                border-radius: 10px;
+                padding: 10px;
+            }
+        """)
 
     def log_to_console(self, message):
         """Log messages to the console."""
-        self.console.insert(tk.END, message + "\n")
-        self.console.see(tk.END)  # Auto-scroll to the bottom
-        self.root.update_idletasks()
+        self.console.append(message)
+        self.console.ensureCursorVisible()
 
     def select_file(self):
-        self.input_path = filedialog.askopenfilename(
-            filetypes=[("Video Files", "*.mp4 *.avi *.mov"), ("All Files", "*.*")]
+        self.input_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov);;All Files (*)"
         )
         if self.input_path:
             self.log_to_console(f"Selected video: {self.input_path}")
@@ -148,33 +256,26 @@ class VideoInterpolationApp:
 
     def update_preview(self, img):
         """Update the preview window with a resized and centered image."""
-        # Get current window size
-        preview_width = self.preview_label.winfo_width()
-        preview_height = self.preview_label.winfo_height()
-        
-        # Resize image to fit the preview area while maintaining aspect ratio
+        # Resize image to fit the preview area
+        preview_width = self.preview_label.width()
+        preview_height = self.preview_label.height()
         img.thumbnail((preview_width, preview_height), Image.ANTIALIAS)
-        
-        # Create a blank canvas with the preview area size
-        canvas = Image.new("RGB", (preview_width, preview_height), "#333")
-        
-        # Paste the image in the center
-        x_offset = (preview_width - img.width) // 2
-        y_offset = (preview_height - img.height) // 2
-        canvas.paste(img, (x_offset, y_offset))
-        
-        # Convert to PhotoImage and display
-        imgtk = ImageTk.PhotoImage(image=canvas)
-        self.preview_label.config(image=imgtk)
-        self.preview_label.image = imgtk
+
+        # Convert PIL image to QPixmap
+        qimage = QImage(img.tobytes(), img.width, img.height, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(qimage)
+
+        # Center the image in the preview area
+        self.preview_label.setPixmap(pixmap)
+        self.preview_label.setAlignment(Qt.AlignCenter)
 
     def start_processing(self):
         if not self.input_path:
             self.log_to_console("Error: Please select a video file first!")
             return
-        
+
         # Load selected model
-        model_name = self.model_combobox.get()
+        model_name = self.model_combobox.currentText()
         try:
             self.model = InterpolationModel().to(self.device)
             self.model.load_state_dict(torch.load(f"models/{model_name}", map_location=self.device))
@@ -183,88 +284,130 @@ class VideoInterpolationApp:
         except Exception as e:
             self.log_to_console(f"Error: Failed to load model: {str(e)}")
             return
-        
+
         # Get processing parameters
-        self.num_cycles = int(self.cycle_spinbox.get())
-        self.output_path = filedialog.asksaveasfilename(
-            defaultextension=".mp4",
-            filetypes=[("MP4 Video", "*.mp4"), ("AVI Video", "*.avi")]
+        self.num_cycles = self.cycle_spinbox.value()
+        self.output_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Output Video", "", "MP4 Video (*.mp4);;AVI Video (*.avi)"
         )
-        
+
         if self.output_path:
             self.processing = True
-            threading.Thread(target=self.process_video).start()
+            self.btn_process.setEnabled(False)
+            self.btn_select.setEnabled(False)
+            self.worker = VideoProcessingThread(
+                self.input_path, self.output_path, self.num_cycles, self.model, self.device
+            )
+            self.worker.progress_signal.connect(self.update_progress)
+            self.worker.log_signal.connect(self.log_to_console)
+            self.worker.finished_signal.connect(self.on_processing_finished)
+            self.worker.start()
 
-    def process_video(self):
+    def update_progress(self, value):
+        self.progress.setValue(value)
+
+    def on_processing_finished(self, success):
+        self.processing = False
+        self.btn_process.setEnabled(True)
+        self.btn_select.setEnabled(True)
+
+        if success:
+            self.log_to_console("Processing complete! Displaying output video...")
+            self.show_preview(self.output_path)
+            QMessageBox.information(self, "Success", "Video processing completed!")
+        else:
+            QMessageBox.critical(self, "Error", "Processing failed. Check console for details.")
+
+    def closeEvent(self, event):
+        if self.processing:
+            reply = QMessageBox.question(
+                self, "Quit", "Processing in progress. Are you sure you want to quit?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
+
+
+class VideoProcessingThread(QThread):
+    progress_signal = pyqtSignal(int)
+    log_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal(bool)
+
+    def __init__(self, input_path, output_path, num_cycles, model, device):
+        super().__init__()
+        self.input_path = input_path
+        self.output_path = output_path
+        self.num_cycles = num_cycles
+        self.model = model
+        self.device = device
+
+    def run(self):
         try:
-            self.log_to_console("Starting video processing...")
-            self.update_progress(0)
-            
+            self.log_signal.emit("Starting video processing...")
+            self.progress_signal.emit(0)
+
             # Phase 1: Extract frames (30% of progress)
-            self.log_to_console("Extracting frames...")
+            self.log_signal.emit("Extracting frames...")
             original_frames, original_res = self.extract_frames(self.input_path)
-            self.update_progress(30)
-            
+            self.progress_signal.emit(30)
+
             # Phase 2: Interpolate frames (60% of progress)
             interpolated_frames = original_frames.copy()
             for cycle in range(self.num_cycles):
-                self.log_to_console(f"Interpolating frames (Cycle {cycle + 1}/{self.num_cycles})...")
+                self.log_signal.emit(f"Interpolating frames (Cycle {cycle + 1}/{self.num_cycles})...")
                 interpolated_frames = self.generate_interpolated_frames(interpolated_frames)
-                self.update_progress(30 + (60 * (cycle + 1) // self.num_cycles))
-            
+                self.progress_signal.emit(30 + (60 * (cycle + 1) // self.num_cycles))
+
             # Phase 3: Save video (10% of progress)
-            self.log_to_console("Saving output video...")
+            self.log_signal.emit("Saving output video...")
             self.create_video(interpolated_frames, original_res)
-            self.update_progress(100)
-            
-            # Show the final video in the preview
-            self.log_to_console("Processing complete! Displaying output video...")
-            self.show_preview(self.output_path)
-            messagebox.showinfo("Success", "Video processing completed!")
-            
+            self.progress_signal.emit(100)
+
+            self.finished_signal.emit(True)
         except Exception as e:
-            self.log_to_console(f"Error: Processing failed: {str(e)}")
-            messagebox.showerror("Error", f"Processing failed: {str(e)}")
-        finally:
-            self.clean_temp_files()
-            self.processing = False
+            self.log_signal.emit(f"Error: Processing failed: {str(e)}")
+            self.finished_signal.emit(False)
 
     def extract_frames(self, video_path):
         cap = cv2.VideoCapture(video_path)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
+
         original_frames = []
         idx = 0
-        while cap.isOpened() and self.processing:
+        while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-            
+
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             original_frames.append(frame)
             idx += 1
-            
+
             # Update progress during extraction
-            self.update_progress(30 * (idx / frame_count))
-        
+            self.progress_signal.emit(int(30 * (idx / frame_count)))
+
         cap.release()
         return original_frames, (width, height)
 
     def generate_interpolated_frames(self, frames):
         interpolated_frames = []
         total_pairs = len(frames) - 1
-        
+
         for i in range(total_pairs):
             frame1 = frames[i]
-            frame2 = frames[i+1]
+            frame2 = frames[i + 1]
             interpolated_frame = self.run_model(frame1, frame2)
             interpolated_frames.extend([frame1, interpolated_frame])
-            
+
             # Update progress during interpolation
-            self.update_progress(30 + (60 * (i + 1) / total_pairs))
-        
+            self.progress_signal.emit(int(30 + (60 * (i + 1) / total_pairs)))
+
         interpolated_frames.append(frames[-1])
         return interpolated_frames
 
@@ -288,33 +431,18 @@ class VideoInterpolationApp:
         cap = cv2.VideoCapture(self.input_path)
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
-        
+
         new_fps = original_fps * (2 ** self.num_cycles)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(self.output_path, fourcc, new_fps, (width, height))
-        
+
         for frame in frames:
             out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         out.release()
 
-    def update_progress(self, value):
-        self.root.after(10, lambda val=value: self.progress.configure(value=val))
-
-    def clean_temp_files(self):
-        for folder in [self.original_frames_dir, self.interpolated_frames_dir]:
-            for file in os.listdir(folder):
-                os.remove(os.path.join(folder, file))
-
-    def on_closing(self):
-        if self.processing:
-            if messagebox.askokcancel("Quit", "Processing in progress. Are you sure you want to quit?"):
-                self.processing = False
-                self.root.destroy()
-        else:
-            self.root.destroy()
 
 if __name__ == "__main__":
-    root = ttk.Window()
-    app = VideoInterpolationApp(root)
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = VideoInterpolationApp()
+    window.show()
+    sys.exit(app.exec_())
