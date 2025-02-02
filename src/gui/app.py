@@ -21,8 +21,14 @@ from models.model import InterpolationModel
 class VideoInterpolationApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AI Video Interpolator")
+        self.setWindowTitle("Decandence: AI Video Interpolator")
         self.setGeometry(100, 100, 1280, 900)
+        
+        # Set application icon
+        app_icon = QIcon("assets/logo_dark.png")
+        self.setWindowIcon(app_icon)
+        QApplication.setWindowIcon(app_icon)  # This sets the taskbar icon
+        
         self.center_window()
 
         # Initialize device
@@ -31,8 +37,8 @@ class VideoInterpolationApp(QMainWindow):
         # Theme settings
         self.dark_mode = True
         self.theme_icons = {
-            True: QIcon("assets/moon.png"),
-            False: QIcon("assets/sun.png")
+            True: QIcon("assets/sun.png"),    # Show sun when in dark mode (to switch to light)
+            False: QIcon("assets/moon.png")   # Show moon when in light mode (to switch to dark)
         }
 
         # Initialize UI
@@ -71,7 +77,7 @@ class VideoInterpolationApp(QMainWindow):
         title_container = QHBoxLayout()
         title_container.setSpacing(8)
         icon_label = QLabel()
-        icon_label.setPixmap(QIcon("assets/app_icon.png").pixmap(QSize(32, 32)))
+        icon_label.setPixmap(QIcon("assets/logo_dark.png").pixmap(QSize(48, 48)))
         title_container.addWidget(icon_label)
         
         title = QLabel("Decadence")
@@ -88,8 +94,9 @@ class VideoInterpolationApp(QMainWindow):
         # Theme toggle
         self.btn_theme = QPushButton()
         self.btn_theme.setIcon(self.theme_icons[self.dark_mode])
-        self.btn_theme.setIconSize(QSize(20, 20))
-        self.btn_theme.setFixedSize(32, 32)
+        self.btn_theme.setIconSize(QSize(16, 16))
+        self.btn_theme.setFixedSize(40, 40)
+        self.btn_theme.setToolTip("Toggle Light/Dark Mode")
         self.btn_theme.clicked.connect(self.toggle_theme)
         self.style_theme_button(self.btn_theme)
         top_bar.addWidget(self.btn_theme)
@@ -208,16 +215,21 @@ class VideoInterpolationApp(QMainWindow):
         self.toggle_theme()
 
     def style_theme_button(self, button):
-        button.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f0f0;
-                border: none;
-                border-radius: 16px;
-                padding: 6px;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
+        bg_color = "#2D2D2D" if self.dark_mode else "#FFFFFF"
+        hover_color = "#363636" if self.dark_mode else "#F0F0F0"
+        border_color = "#404040" if self.dark_mode else "#E0E0E0"
+        
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                border-radius: 20px;
+                padding: 0px;
+                margin: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_color};
+            }}
         """)
 
     def style_section(self, widget):
@@ -351,6 +363,7 @@ class VideoInterpolationApp(QMainWindow):
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
         self.btn_theme.setIcon(self.theme_icons[self.dark_mode])
+        self.style_theme_button(self.btn_theme)
         
         # Update window background
         self.setStyleSheet(f"""
