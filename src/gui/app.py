@@ -108,8 +108,9 @@ class VideoInterpolationApp(QMainWindow):
         left_layout.setSpacing(4)
 
         # Model section
-        model_section = QWidget()
-        model_layout = QVBoxLayout(model_section)
+        self.model_section = QWidget()
+        self.model_section.setObjectName("model_section")
+        model_layout = QVBoxLayout(self.model_section)
         model_layout.setContentsMargins(12, 12, 12, 12)
         model_layout.setSpacing(6)
 
@@ -132,12 +133,12 @@ class VideoInterpolationApp(QMainWindow):
         self.style_spinbox(self.cycle_spinbox, "#2196F3")
         model_layout.addWidget(self.cycle_spinbox)
 
-        self.style_section(model_section)
-        left_layout.addWidget(model_section)
+        self.style_section(self.model_section)
+        left_layout.addWidget(self.model_section)
 
         # Action buttons
-        button_section = QWidget()
-        button_layout = QVBoxLayout(button_section)
+        self.button_section = QWidget()
+        button_layout = QVBoxLayout(self.button_section)
         button_layout.setContentsMargins(12, 12, 12, 12)
         button_layout.setSpacing(8)
 
@@ -153,8 +154,8 @@ class VideoInterpolationApp(QMainWindow):
         self.btn_process.clicked.connect(self.start_processing)
         button_layout.addWidget(self.btn_process)
 
-        self.style_section(button_section)
-        left_layout.addWidget(button_section)
+        self.style_section(self.button_section)
+        left_layout.addWidget(self.button_section)
         left_layout.addStretch()
 
         # Add progress bar to left panel
@@ -170,8 +171,8 @@ class VideoInterpolationApp(QMainWindow):
         right_panel.setSpacing(15)
 
         # Preview area
-        preview_section = QWidget()
-        preview_layout = QVBoxLayout(preview_section)
+        self.preview_section = QWidget()
+        preview_layout = QVBoxLayout(self.preview_section)
         preview_layout.setContentsMargins(12, 12, 12, 12)
         
         self.preview_label = QLabel()
@@ -179,12 +180,12 @@ class VideoInterpolationApp(QMainWindow):
         self.preview_label.setMinimumHeight(400)
         preview_layout.addWidget(self.preview_label)
         
-        self.style_section(preview_section)
-        right_panel.addWidget(preview_section, 2)
+        self.style_section(self.preview_section)
+        right_panel.addWidget(self.preview_section, 2)
 
         # Console area
-        console_section = QWidget()
-        console_layout = QVBoxLayout(console_section)
+        self.console_section = QWidget()
+        console_layout = QVBoxLayout(self.console_section)
         console_layout.setContentsMargins(12, 12, 12, 12)
 
         console_header = QLabel("Console Output")
@@ -197,8 +198,8 @@ class VideoInterpolationApp(QMainWindow):
         self.style_console(self.console)
         console_layout.addWidget(self.console)
         
-        self.style_section(console_section)
-        right_panel.addWidget(console_section, 1)
+        self.style_section(self.console_section)
+        right_panel.addWidget(self.console_section, 1)
 
         content.addLayout(right_panel, 1)
         main_layout.addLayout(content)
@@ -220,12 +221,12 @@ class VideoInterpolationApp(QMainWindow):
         """)
 
     def style_section(self, widget):
-        widget.setStyleSheet("""
-            QWidget {
-                background-color: #ffffff;
-                border: 1px solid #e0e0e0;
+        widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.get_theme_color('section_bg')};
+                border: 1px solid {self.get_theme_color('border')};
                 border-radius: 8px;
-            }
+            }}
         """)
 
     def style_combo(self, widget, color):
@@ -234,7 +235,8 @@ class VideoInterpolationApp(QMainWindow):
                 border: 1px solid {color};
                 border-radius: 4px;
                 padding: 5px;
-                background: white;
+                background: {self.get_theme_color('input_bg')};
+                color: {self.get_theme_color('text')};
                 min-height: 30px;
                 background-color: {color}10;
             }}
@@ -242,6 +244,15 @@ class VideoInterpolationApp(QMainWindow):
                 border: none;
                 width: 24px;
                 border-left: 1px solid {color};
+            }}
+            QComboBox::down-arrow {{
+                image: url(assets/dropdown_{self.get_theme_color('arrow')}.png);
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {self.get_theme_color('input_bg')};
+                color: {self.get_theme_color('text')};
+                selection-background-color: {color}40;
+                selection-color: {self.get_theme_color('text')};
             }}
         """)
 
@@ -251,9 +262,14 @@ class VideoInterpolationApp(QMainWindow):
                 border: 1px solid {color};
                 border-radius: 4px;
                 padding: 5px;
-                background: white;
+                background: {self.get_theme_color('input_bg')};
+                color: {self.get_theme_color('text')};
                 min-height: 30px;
                 background-color: {color}10;
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                background-color: transparent;
+                border: none;
             }}
         """)
 
@@ -284,86 +300,112 @@ class VideoInterpolationApp(QMainWindow):
     def style_progress(self, progress, color):
         progress.setStyleSheet(f"""
             QProgressBar {{
-                border: 2px solid {color};
-                border-radius: 8px;
-                height: 15px;
-            }}
-            QProgressBar::chunk {{
-                background-color: {color};
-                border-radius: 5px;
-            }}
-        """)
-
-    def style_console(self, console):
-        console.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 8px;
-                background: #fafafa;
-            }
-        """)
-
-    def style_spinbox(self, widget, color):
-        widget.setStyleSheet(f"""
-            QSpinBox {{
-                background-color: {color}20;
-                border: 2px solid {color};
-                border-radius: 8px;
-                padding: 5px;
-                color: #424242;
-            }}
-        """)
-
-    def style_button(self, button, color):
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{background-color: {color}DD;}}
-            QPushButton:disabled {{background-color: #BDBDBD;}}
-        """)
-
-    def style_progress(self, progress, color):
-        progress.setStyleSheet(f"""
-            QProgressBar {{
-                border: 1px solid #e0e0e0;
+                border: 1px solid {self.get_theme_color('border')};
                 border-radius: 4px;
                 text-align: center;
                 height: 8px;
+                background-color: {self.get_theme_color('input_bg')};
             }}
             QProgressBar::chunk {{
-                background-color: {color};
+                background-color: #2196F3;
                 border-radius: 3px;
             }}
         """)
 
+    def style_console(self, console):
+        console.setStyleSheet(f"""
+            QTextEdit {{
+                border: 1px solid {self.get_theme_color('border')};
+                border-radius: 4px;
+                padding: 8px;
+                background: {self.get_theme_color('console_bg')};
+                color: {self.get_theme_color('text')};
+            }}
+        """)
+
+    def get_theme_color(self, key):
+        colors = {
+            'dark': {
+                'window_bg': '#1E1E1E',
+                'section_bg': '#2D2D2D',
+                'input_bg': '#363636',
+                'console_bg': '#252526',
+                'border': '#404040',
+                'text': '#FFFFFF',
+                'secondary_text': '#AAAAAA',
+                'arrow': 'light'
+            },
+            'light': {
+                'window_bg': '#F5F5F5',
+                'section_bg': '#FFFFFF',
+                'input_bg': '#FFFFFF',
+                'console_bg': '#FAFAFA',
+                'border': '#E0E0E0',
+                'text': '#424242',
+                'secondary_text': '#666666',
+                'arrow': 'dark'
+            }
+        }
+        return colors['dark' if self.dark_mode else 'light'][key]
+
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
         self.btn_theme.setIcon(self.theme_icons[self.dark_mode])
-        stylesheet = """
-            QWidget {background-color: #2D2D2D; color: #FFFFFF;}
-            QLabel#title {color: #FFFFFF;}
-            QTextEdit {background-color: #3D3D3D; color: #FFFFFF; border-color: #4D4D4D;}
-            QLabel {color: #BDBDBD;}
-        """ if self.dark_mode else """
-            QWidget {background-color: #F5F5F5; color: #424242;}
-            QLabel#title {color: #2A2A2A;}
-            QTextEdit {background-color: #FFFFFF; color: #424242; border-color: #E0E0E0;}
-            QLabel {color: #616161;}
-        """
-        self.setStyleSheet(stylesheet)
-        self.preview_label.setStyleSheet("""
-            background-color: %s;
-            border-radius: 10px;
-            border: 2px solid %s;
-        """ % ("#3D3D3D" if self.dark_mode else "#FFFFFF", 
-              "#4D4D4D" if self.dark_mode else "#E0E0E0"))
+        
+        # Update window background
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {self.get_theme_color('window_bg')};
+            }}
+        """)
+
+        # Update all section widgets
+        for widget in self.findChildren(QWidget):
+            if widget.parent() and isinstance(widget.parent(), QMainWindow):
+                widget.setStyleSheet(f"""
+                    QWidget {{
+                        background-color: {self.get_theme_color('window_bg')};
+                        color: {self.get_theme_color('text')};
+                    }}
+                """)
+
+        # Update labels
+        for label in self.findChildren(QLabel):
+            if "title" in str(label.objectName()).lower():
+                label.setStyleSheet(f"color: {self.get_theme_color('text')};")
+            else:
+                label.setStyleSheet(f"color: {self.get_theme_color('secondary_text')};")
+
+        # Refresh all styled components
+        for section in [self.model_section, self.button_section, self.preview_section, self.console_section]:
+            self.style_section(section)
+        self.style_combo(self.model_combobox, "#4CAF50")
+        self.style_spinbox(self.cycle_spinbox, "#2196F3")
+        self.style_console(self.console)
+        
+        # Update preview background
+        self.preview_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: {self.get_theme_color('section_bg')};
+                border-radius: 10px;
+                border: 2px solid {self.get_theme_color('border')};
+            }}
+        """)
+
+        # Update progress bar
+        self.progress.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid {self.get_theme_color('border')};
+                border-radius: 4px;
+                text-align: center;
+                height: 8px;
+                background-color: {self.get_theme_color('input_bg')};
+            }}
+            QProgressBar::chunk {{
+                background-color: #2196F3;
+                border-radius: 3px;
+            }}
+        """)
 
     def log_to_console(self, message):
         self.console.append(message)
