@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSpinBox, QProgressBar, QFileDialog, QMessageBox, QTextEdit, QScrollArea
 )
-from PyQt5.QtGui import QPixmap, QImage, QColor, QPalette, QFont
+from PyQt5.QtGui import QPixmap, QImage, QIcon
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PIL import Image
 # Add the project root directory to Python's module search path
@@ -68,22 +68,15 @@ class VideoInterpolationApp(QMainWindow):
         control_layout.setAlignment(Qt.AlignTop)
 
         # Application title
-        title = QLabel("AI Video Interpolator")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        control_layout.addWidget(title)
-
-        # Theme toggle button
-        self.btn_theme = QPushButton("Switch to Light Mode")
-        self.btn_theme.clicked.connect(self.toggle_theme)
-        self.btn_theme.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
-        control_layout.addWidget(self.btn_theme)
+        title_label = QLabel("Decadence AI Video Interpolator")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #fff;")
+        control_layout.addWidget(title_label)
 
         # Model selection
         control_layout.addWidget(QLabel("Select Model:"))
         self.model_combobox = QComboBox()
         self.model_combobox.addItems(self.available_models)
-        self.model_combobox.setStyleSheet("QComboBox { border-radius: 10px; padding: 5px; }")
+        self.model_combobox.setStyleSheet("QComboBox { border-radius: 10px; padding: 5px; background-color: #444; color: #fff; }")
         control_layout.addWidget(self.model_combobox)
 
         # Interpolation cycles
@@ -91,26 +84,33 @@ class VideoInterpolationApp(QMainWindow):
         self.cycle_spinbox = QSpinBox()
         self.cycle_spinbox.setRange(1, 3)
         self.cycle_spinbox.setValue(1)
-        self.cycle_spinbox.setStyleSheet("QSpinBox { border-radius: 10px; padding: 5px; }")
+        self.cycle_spinbox.setStyleSheet("QSpinBox { border-radius: 10px; padding: 5px; background-color: #444; color: #fff; }")
         control_layout.addWidget(self.cycle_spinbox)
 
         # File selection button
         self.btn_select = QPushButton("Select Video File")
         self.btn_select.clicked.connect(self.select_file)
-        self.btn_select.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
+        self.btn_select.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; background-color: #4CAF50; color: #fff; }"
+                                     "QPushButton:hover { background-color: #45a049; }")
         control_layout.addWidget(self.btn_select)
 
         # Process button
         self.btn_process = QPushButton("Process Video")
         self.btn_process.clicked.connect(self.start_processing)
-        self.btn_process.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; }")
+        self.btn_process.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; background-color: #2196F3; color: #fff; }"
+                                      "QPushButton:hover { background-color: #1e88e5; }")
         control_layout.addWidget(self.btn_process)
+        
+        # Theme toggle button with icon
+        self.btn_theme = QPushButton()
+        self.btn_theme.setIcon(QIcon("assets/logo_no_bg.ico"))  # Add a small icon for theme switcher
+        self.btn_theme.setToolTip("Switch Theme")
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        self.btn_theme.setStyleSheet("QPushButton { border-radius: 10px; padding: 10px; background-color: #444; }")
+        self.btn_theme.setMaximumWidth(50)
+        control_layout.addWidget(self.btn_theme)
 
-        # Progress bar
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setStyleSheet("QProgressBar { border-radius: 5px; }")
-        control_layout.addWidget(self.progress)
+        
 
         # Add control panel to main layout
         main_layout.addWidget(control_panel, stretch=1)
@@ -122,13 +122,20 @@ class VideoInterpolationApp(QMainWindow):
         # Preview label for video/image
         self.preview_label = QLabel()
         self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setStyleSheet("background-color: #333; border-radius: 10px;")
+        self.preview_label.setStyleSheet("background-color: #555; border-radius: 10px;")
         right_layout.addWidget(self.preview_label, stretch=3)
+
+        # Progress bar
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setStyleSheet("QProgressBar { border-radius: 5px; background-color: #444; }"
+                                   "QProgressBar::chunk { background-color: #2196F3; border-radius: 5px; }")
+        right_layout.addWidget(self.progress)
 
         # Console view
         self.console = QTextEdit()
         self.console.setReadOnly(True)
-        self.console.setStyleSheet("background-color: #333; color: #fff; border-radius: 10px; padding: 10px;")
+        self.console.setStyleSheet("background-color: #555; color: #fff; border-radius: 10px; padding: 10px;")
         right_layout.addWidget(self.console, stretch=1)
 
         # Add right panel to main layout
@@ -142,48 +149,40 @@ class VideoInterpolationApp(QMainWindow):
         self.dark_mode = not self.dark_mode
         if self.dark_mode:
             self.set_dark_theme()
-            self.btn_theme.setText("Switch to Light Mode")
         else:
             self.set_light_theme()
-            self.btn_theme.setText("Switch to Dark Mode")
 
     def set_dark_theme(self):
         """Apply dark theme styling."""
         self.setStyleSheet("""
-            QWidget {
-                background-color: #2E3440;
-                color: #ECEFF4;
-            }
             QLabel {
-                color: #ECEFF4;
+                color: #333;
+            }
+            QWidget {
+                background-color: #333;
+                color: #fff;
             }
             QPushButton {
-                background-color: #5E81AC;
-                color: #ECEFF4;
                 border-radius: 10px;
                 padding: 10px;
             }
-            QPushButton:hover {
-                background-color: #81A1C1;
-            }
             QComboBox, QSpinBox {
-                background-color: #4C566A;
-                color: #ECEFF4;
                 border-radius: 10px;
                 padding: 5px;
+                background-color: #444;
+                color: #fff;
             }
             QProgressBar {
-                background-color: #4C566A;
-                color: #ECEFF4;
                 border-radius: 5px;
+                background-color: #444;
             }
             QProgressBar::chunk {
-                background-color: #81A1C1;
+                background-color: #2196F3;
                 border-radius: 5px;
             }
             QTextEdit {
-                background-color: #3B4252;
-                color: #ECEFF4;
+                background-color: #333;
+                color: #fff;
                 border-radius: 10px;
                 padding: 10px;
             }
@@ -193,39 +192,30 @@ class VideoInterpolationApp(QMainWindow):
         """Apply light theme styling."""
         self.setStyleSheet("""
             QWidget {
-                background-color: #ECEFF4;
-                color: #2E3440;
-            }
-            QLabel {
-                color: #2E3440;
+                background-color: #f0f0f0;
+                color: #000;
             }
             QPushButton {
-                background-color: #81A1C1;
-                color: #ECEFF4;
                 border-radius: 10px;
                 padding: 10px;
             }
-            QPushButton:hover {
-                background-color: #5E81AC;
-            }
             QComboBox, QSpinBox {
-                background-color: #D8DEE9;
-                color: #2E3440;
                 border-radius: 10px;
                 padding: 5px;
+                background-color: #fff;
+                color: #000;
             }
             QProgressBar {
-                background-color: #D8DEE9;
-                color: #2E3440;
                 border-radius: 5px;
+                background-color: #fff;
             }
             QProgressBar::chunk {
-                background-color: #81A1C1;
+                background-color: #2196F3;
                 border-radius: 5px;
             }
             QTextEdit {
-                background-color: #E5E9F0;
-                color: #2E3440;
+                background-color: #fff;
+                color: #000;
                 border-radius: 10px;
                 padding: 10px;
             }
