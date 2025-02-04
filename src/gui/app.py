@@ -165,11 +165,7 @@ class VideoInterpolationApp(QMainWindow):
         left_layout.addWidget(self.button_section)
         left_layout.addStretch()
 
-        # Add progress bar to left panel
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.style_progress(self.progress, "#2196F3")
-        left_layout.addWidget(self.progress)
+        
 
         content.addWidget(left_panel)
 
@@ -189,6 +185,12 @@ class VideoInterpolationApp(QMainWindow):
         
         self.style_section(self.preview_section)
         right_panel.addWidget(self.preview_section, 2)
+
+        # Add progress bar to left panel
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.style_progress(self.progress, "#2196F3")
+        right_panel.addWidget(self.progress)
 
         # Console area
         self.console_section = QWidget()
